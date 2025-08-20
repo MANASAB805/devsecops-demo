@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: tic-tac-toe
-        image: image: ghcr.io/MANASAB805/devsecops-demo:sha-<commit_sha>
+        image: ghcr.io/MANASAB805/devsecops-demo:sha-<commit_sha>
         # Image will be automatically updated by CI/CD pipeline
         imagePullPolicy: Always
         ports:
