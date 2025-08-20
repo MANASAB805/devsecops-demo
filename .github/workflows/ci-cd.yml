@@ -15,10 +15,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # fetch full history
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -39,14 +37,12 @@ jobs:
             ${{ env.REGISTRY }}/${{ github.repository }}:main
             ${{ env.REGISTRY }}/${{ github.repository }}:sha-${{ github.sha }}
 
-      - name: Set up Trivy
-        uses: aquasecurity/setup-trivy@v1
-        with:
-          version: 0.64.1
-
       - name: Run Trivy Scan
-        run: |
-          trivy image --exit-code 1 --severity HIGH,CRITICAL ${{ env.REGISTRY }}/${{ github.repository }}:sha-${{ github.sha }}
+        uses: aquasecurity/trivy-action@v2
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}:sha-${{ github.sha }}
+          exit-code: '1'
+          severity-threshold: 'HIGH,CRITICAL'
 
   update-deployment:
     name: Update Kubernetes Deployment
@@ -54,27 +50,30 @@ jobs:
     needs: build-and-scan
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # important for pushing changes
-          ref: main
 
       - name: Set Git config
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
 
+      - name: Sync with remote main
+        run: |
+          git fetch origin main
+          git reset --hard origin/main
+
       - name: Update deployment image
         run: |
-          NEW_IMAGE="${REGISTRY}/${GITHUB_REPOSITORY,,}:sha-${GITHUB_SHA}"
-          sed -i "s|image: ${REGISTRY}/.*|image: ${NEW_IMAGE}|g" kubernetes/deployment.yaml
-          echo "Updated deployment to use image: ${NEW_IMAGE}"
+          NEW_IMAGE="${{ env.REGISTRY }}/manasab805/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}"
+          echo "Updating deployment to use image: $NEW_IMAGE"
+          sed -i "s|image: ghcr.io/manasab805/devsecops-demo:.*|image: ${NEW_IMAGE}|g" kubernetes/deployment.yaml
           grep -A 1 "image:" kubernetes/deployment.yaml
 
-      - name: Commit and push changes
+      - name: Commit and push deployment update
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git add kubernetes/deployment.yaml
           git commit -m "Update deployment image to $NEW_IMAGE" || echo "No changes to commit"
-          git pull --rebase origin main   # sync remote changes
-          git push origin main            # push safely
+          git push origin main
