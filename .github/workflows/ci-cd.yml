@@ -15,10 +15,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # important to get full history for proper push
+          fetch-depth: 0  # fetch full history
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -54,11 +54,11 @@ jobs:
     needs: build-and-scan
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: main        # attach to main branch
-          fetch-depth: 0   # full history for push
+          fetch-depth: 0  # important for pushing changes
+          ref: main
 
       - name: Set Git config
         run: |
@@ -67,14 +67,14 @@ jobs:
 
       - name: Update deployment image
         run: |
-          NEW_IMAGE="ghcr.io/manasab805/devsecops-demo:sha-${GITHUB_SHA}"
-          echo "Updating deployment to use image: $NEW_IMAGE"
-          sed -i "s|image: ghcr.io/manasab805/devsecops-demo:.*|image: ${NEW_IMAGE}|g" kubernetes/deployment.yaml
+          NEW_IMAGE="${REGISTRY}/${GITHUB_REPOSITORY,,}:sha-${GITHUB_SHA}"
+          sed -i "s|image: ${REGISTRY}/.*|image: ${NEW_IMAGE}|g" kubernetes/deployment.yaml
+          echo "Updated deployment to use image: ${NEW_IMAGE}"
           grep -A 1 "image:" kubernetes/deployment.yaml
 
       - name: Commit and push changes
         run: |
           git add kubernetes/deployment.yaml
           git commit -m "Update deployment image to $NEW_IMAGE" || echo "No changes to commit"
-          git pull --rebase origin main  # safely integrate remote changes
-          git push origin main
+          git pull --rebase origin main   # sync remote changes
+          git push origin main            # push safely
